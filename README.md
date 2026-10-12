@@ -1,5 +1,7 @@
 # sidetone-toggle
 
+<img src="logo.svg" alt="sidetone-toggle logo: a headset whose mic signal loops back into the ear cup" width="128">
+
 [![Lint](https://github.com/loganmarchione/sidetone-toggle/actions/workflows/lint.yml/badge.svg)](https://github.com/loganmarchione/sidetone-toggle/actions/workflows/lint.yml) ![](https://img.shields.io/badge/100%25%20Claude--coded-🚀-00a67d?logo=claude)
 
 A small script that toggles **mic sidetone** on Linux, so you can hear your own voice in your headphones during calls. It uses PipeWire's (or PulseAudio's) `module-loopback` and KDE's `kdialog` for menus and notifications.
