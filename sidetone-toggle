@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Toggle mic sidetone (mic -> headphones loopback) via PipeWire/PulseAudio.
+# Usage: sidetone-toggle [--setup]
+
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/sidetone-toggle.conf"
+TAG="media.name=Sidetone"
+GEOMETRY="700x400"
+
+notify() {
+    kdialog --title "Sidetone" --passivepopup "$1" 3
+}
+
+# Find our loopback by its tag, so a stale module ID can never be unloaded by mistake.
+mapfile -t RUNNING < <(LC_ALL=C pactl list short modules |
+    awk -v tag="$TAG" '$2 == "module-loopback" && index($0, tag) {print $1}')
+
+if (( ${#RUNNING[@]} > 0 )); then
+    for id in "${RUNNING[@]}"; do
+        pactl unload-module "$id" || { kdialog --error "Could not stop sidetone (module $id)."; exit 1; }
+    done
+    notify "Sidetone OFF"
+    exit 0
+fi
+
+# Prints "name<TAB>description" per device, skipping sink monitors.
+list_devices() {
+    LC_ALL=C pactl list "$1" | awk '
+        /^\tName: /        { name = substr($0, index($0, ": ") + 2) }
+        /^\tDescription: / { if (name !~ /\.monitor$/) print name "\t" substr($0, index($0, ": ") + 2) }'
+}
+
+# $1 = sources|sinks, $2 = prompt, $3 = preselected device name
+pick_device() {
+    local name desc args=()
+    while IFS=$'\t' read -r name desc; do
+        args+=("$name" "$desc")
+    done < <(list_devices "$1")
+    if (( ${#args[@]} == 0 )); then
+        kdialog --error "No audio $1 found."
+        return 1
+    fi
+    kdialog --title "Sidetone" --geometry "$GEOMETRY" --default "$3" --menu "$2" "${args[@]}"
+}
+
+device_exists() {
+    LC_ALL=C pactl list short "$1" | awk -v n="$2" '$2 == n {f=1} END {exit !f}'
+}
+
+SOURCE="" SINK="" LATENCY=1
+[[ -f "$CONFIG" ]] && source "$CONFIG"
+
+if [[ "${1:-}" == "--setup" ]] || ! device_exists sources "$SOURCE" || ! device_exists sinks "$SINK"; then
+    SOURCE=$(pick_device sources "Choose your input:" "$SOURCE") || exit 0
+    SINK=$(pick_device sinks "Choose your output:" "$SINK") || exit 0
+    LATENCY=$(kdialog --title "Sidetone" --geometry "$GEOMETRY" --inputbox \
+        "Target latency in ms (raise it if you hear crackling):" "$LATENCY") || exit 0
+    if [[ ! "$LATENCY" =~ ^[0-9]+$ ]] || (( LATENCY < 1 || LATENCY > 200 )); then
+        kdialog --error "Enter a latency from 1 to 200 ms."
+        exit 1
+    fi
+    mkdir -p "$(dirname "$CONFIG")"
+    printf 'SOURCE=%q\nSINK=%q\nLATENCY=%q\n' "$SOURCE" "$SINK" "$LATENCY" > "$CONFIG"
+fi
+
+if pactl load-module module-loopback \
+    "source=$SOURCE" "sink=$SINK" "latency_msec=$LATENCY" \
+    "source_output_properties=$TAG" "sink_input_properties=$TAG" > /dev/null
+then
+    notify "Sidetone ON — ${LATENCY} ms"
+else
+    kdialog --error "Could not start sidetone. Check your PipeWire audio setup."
+    exit 1
+fi
