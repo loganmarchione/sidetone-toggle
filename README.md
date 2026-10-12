@@ -36,13 +36,26 @@ To bind the script to a key, go to **System Settings → Keyboard → Shortcuts 
 ## Usage
 
 ```sh
-sidetone-toggle          # toggle sidetone on/off
-sidetone-toggle --setup  # pick devices and latency again
+sidetone-toggle           # toggle sidetone on/off
+sidetone-toggle --setup   # pick devices and latency again
+sidetone-toggle --status  # print "on" or "off" without changing anything
 ```
 
 - **First run:** choose your microphone, headphone output, and latency. Your choices are saved.
 - **Later runs:** toggles on and off straight away, with no menus.
 - If a saved device isn't connected, the menus appear again.
+
+### Status
+
+`--status` prints `on` or `off` and exits with `0` if sidetone is on, or `1` if it's off. It never toggles anything, so it's safe to use in other scripts or panel widgets:
+
+```sh
+if sidetone-toggle --status > /dev/null; then
+  echo "Sidetone is on"
+fi
+```
+
+If `pactl` can't reach the audio server, `--status` reports `off`.
 
 ## How it works
 
